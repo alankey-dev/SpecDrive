@@ -1,7 +1,7 @@
 import pytest
 
-from specflow import state
-from specflow.cli import main
+from specdrive import state
+from specdrive.cli import main
 
 
 def test_init_then_status(tmp_path, capsys):
@@ -16,7 +16,7 @@ def test_init_then_status(tmp_path, capsys):
 
 def test_status_unmanaged_returns_1(tmp_path, capsys):
     assert main(["status", str(tmp_path)]) == 1
-    assert "not specflow-managed" in capsys.readouterr().out
+    assert "not specdrive-managed" in capsys.readouterr().out
 
 
 def test_init_refuses_without_force(tmp_path, capsys):
@@ -44,7 +44,7 @@ def test_status_shows_buckets(tmp_path, capsys):
 
 def test_playbook_prints(capsys):
     assert main(["playbook"]) == 0
-    assert "# specflow playbook" in capsys.readouterr().out
+    assert "# specdrive playbook" in capsys.readouterr().out
 
 
 def test_log_prints(tmp_path, capsys):
@@ -57,7 +57,7 @@ def test_log_prints(tmp_path, capsys):
 
 def test_install_via_cli(tmp_path, capsys):
     assert main(["install", "generic", str(tmp_path)]) == 0
-    assert (tmp_path / "SPECFLOW.md").is_file()
+    assert (tmp_path / "SPECDRIVE.md").is_file()
     out = capsys.readouterr().out
     assert "installed generic adapter" in out
 
@@ -78,13 +78,13 @@ def test_xcheck_writes_state_and_logs(tmp_path, capsys):
 
     s = state.load_state(tmp_path)
     assert s["cross_check"] == "self-critique"
-    log = (state.specflow_dir(tmp_path) / state.DECISION_LOG_FILE).read_text()
+    log = (state.specdrive_dir(tmp_path) / state.DECISION_LOG_FILE).read_text()
     assert "Cross-check mode set to self-critique" in log
 
 
 def test_xcheck_unmanaged_returns_1(tmp_path, capsys):
     assert main(["xcheck", "none", str(tmp_path)]) == 1
-    assert "not specflow-managed" in capsys.readouterr().err
+    assert "not specdrive-managed" in capsys.readouterr().err
 
 
 def test_xcheck_bad_mode_rejected(tmp_path):

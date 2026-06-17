@@ -1,16 +1,16 @@
 import pytest
 
-from specflow import adapters
+from specdrive import adapters
 
 
 def _playbook_marker() -> str:
     # A line that lives in the canonical playbook; proves it was embedded.
-    return "# specflow playbook"
+    return "# specdrive playbook"
 
 
 def test_claude_code_adapter_path_and_content(tmp_path):
     target = adapters.install_adapter("claude-code", tmp_path)
-    assert target == tmp_path / ".claude" / "commands" / "specflow.md"
+    assert target == tmp_path / ".claude" / "commands" / "specdrive.md"
     text = target.read_text()
     assert text.startswith("---")  # frontmatter
     assert "description:" in text
@@ -19,7 +19,7 @@ def test_claude_code_adapter_path_and_content(tmp_path):
 
 def test_generic_adapter_path_and_content(tmp_path):
     target = adapters.install_adapter("generic", tmp_path)
-    assert target == tmp_path / "SPECFLOW.md"
+    assert target == tmp_path / "SPECDRIVE.md"
     text = target.read_text()
     assert _playbook_marker() in text
 

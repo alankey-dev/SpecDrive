@@ -20,15 +20,15 @@ dependencies = []
 dev = ["pytest>=7"]
 
 [project.scripts]
-specflow = "specflow.cli:main"
+specdrive = "specdrive.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
 
 [tool.hatch.version]
-path = "src/specflow/state.py"
+path = "src/specdrive/state.py"
 pattern = "SCHEMA_VERSION = \"(?P<version>[^\"]+)\""
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/specflow"]
+packages = ["src/specdrive"]

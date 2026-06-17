@@ -1,6 +1,6 @@
-# specflow playbook
+# specdrive playbook
 
-You are running **specflow**: a methodology that takes a project from a fuzzy
+You are running **specdrive**: a methodology that takes a project from a fuzzy
 idea to a finished thing without drifting from the original goal. You orchestrate
 the process. You do not race ahead. The single decision this whole method exists
 to drive, repeated at every step, is:
@@ -24,32 +24,32 @@ Keep that question in view the entire time.
 - **Stay honest.** At every checkpoint, openly check the current work against the
   Phase 1 goal and say so if anything has drifted.
 - **Be agent-agnostic.** Do not assume any specific agent's features. Refer to
-  yourself generically as "specflow" and to the environment as "the agent". Do
+  yourself generically as "specdrive" and to the environment as "the agent". Do
   not depend on tools that may not exist; detect, then use or skip.
 
 ---
 
 ## State contract
 
-specflow is stateful across sessions and across agents. State lives as plain
+specdrive is stateful across sessions and across agents. State lives as plain
 files in the project so any agent can read and write them. Read state at the
 start of every session; write it whenever a decision is locked or a phase/bucket
 boundary is crossed.
 
-Layout (created by `specflow init`, implemented in the State bucket):
+Layout (created by `specdrive init`, implemented in the State bucket):
 
 ```
-.specflow/
+.specdrive/
   state.json        machine-readable progress
   decision-log.md   human-readable running log of locked decisions
-  fingerprint       marker proving this project is specflow-managed
+  fingerprint       marker proving this project is specdrive-managed
 ```
 
 `state.json` shape (authoritative; the State bucket implements exactly this):
 
 ```json
 {
-  "specflow_version": "0.1.0",
+  "specdrive_version": "0.1.0",
   "phase": "1-goal | 2-buckets | 3-build | done",
   "goal": "restated goal, locked in Phase 1",
   "core_decision": "the single decision the project drives",
@@ -64,7 +64,7 @@ Layout (created by `specflow init`, implemented in the State bucket):
 ```
 
 Rules:
-- If `.specflow/` is absent, you are starting fresh: go to Phase 1.
+- If `.specdrive/` is absent, you are starting fresh: go to Phase 1.
 - If it exists, load it, summarise where things stand, and resume at `phase` /
   `current_bucket`.
 - Every locked decision gets one line appended to `decision-log.md` as
@@ -151,7 +151,7 @@ works. If one is present, use the tool path. Otherwise, self-critique.
 2. Surface any disagreement to the user plainly. Do not bury it.
 3. Settle each disagreement: either fix it, or explain why you are keeping your
    version. Note what you changed as a result.
-4. Record the method: run `specflow xcheck codex-mcp` (or the relevant mode) to
+4. Record the method: run `specdrive xcheck codex-mcp` (or the relevant mode) to
    write `cross_check` to `state.json`.
 
 ### 2b. Self-critique path (no second model)
@@ -163,9 +163,9 @@ Argue the strongest case **against** your own output:
 - Which parts you want a second pair of **human** eyes on, so the user can take
   them to another model themselves.
 
-Then record the method: run `specflow xcheck self-critique`.
+Then record the method: run `specdrive xcheck self-critique`.
 
-If you genuinely skip the check, run `specflow xcheck none` and say why.
+If you genuinely skip the check, run `specdrive xcheck none` and say why.
 
 ---
 

@@ -1,6 +1,6 @@
-"""specflow agent adapters.
+"""specdrive agent adapters.
 
-An adapter makes specflow invokable inside a specific coding agent. Each adapter
+An adapter makes specdrive invokable inside a specific coding agent. Each adapter
 is a thin wrapper: an agent-specific header plus the canonical playbook rendered
 in at install time. The playbook (playbook.md, package data) stays the single
 source of truth; re-run `install --force` to refresh an adapter after the
@@ -18,16 +18,16 @@ from typing import Callable
 
 
 def _playbook() -> str:
-    return (files("specflow") / "playbook.md").read_text(encoding="utf-8")
+    return (files("specdrive") / "playbook.md").read_text(encoding="utf-8")
 
 
 def _claude_code(playbook: str) -> str:
     return (
         "---\n"
-        "description: Run the specflow methodology (idea to finished thing, no drift)\n"
+        "description: Run the specdrive methodology (idea to finished thing, no drift)\n"
         "---\n\n"
-        "Follow the specflow playbook below exactly. Read the project's "
-        "`.specflow/state.json` and `decision-log.md` first; if absent, start at "
+        "Follow the specdrive playbook below exactly. Read the project's "
+        "`.specdrive/state.json` and `decision-log.md` first; if absent, start at "
         "Phase 1.\n\n"
         "---\n\n" + playbook
     )
@@ -35,9 +35,9 @@ def _claude_code(playbook: str) -> str:
 
 def _generic(playbook: str) -> str:
     return (
-        "# specflow (read me and follow)\n\n"
-        "This project uses the specflow methodology. Read the playbook below and "
-        "follow it exactly. Check `.specflow/state.json` and `decision-log.md` for "
+        "# specdrive (read me and follow)\n\n"
+        "This project uses the specdrive methodology. Read the playbook below and "
+        "follow it exactly. Check `.specdrive/state.json` and `decision-log.md` for "
         "where things stand; if absent, start at Phase 1.\n\n"
         "---\n\n" + playbook
     )
@@ -54,15 +54,15 @@ class Adapter:
 ADAPTERS: dict[str, Adapter] = {
     "claude-code": Adapter(
         name="claude-code",
-        relative_path=".claude/commands/specflow.md",
+        relative_path=".claude/commands/specdrive.md",
         render=_claude_code,
-        note="Use the /specflow slash command in Claude Code.",
+        note="Use the /specdrive slash command in Claude Code.",
     ),
     "generic": Adapter(
         name="generic",
-        relative_path="SPECFLOW.md",
+        relative_path="SPECDRIVE.md",
         render=_generic,
-        note="Point any agent at SPECFLOW.md (works everywhere).",
+        note="Point any agent at SPECDRIVE.md (works everywhere).",
     ),
 }
 

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from specflow import state
+from specdrive import state
 
 
 def test_init_creates_files_and_fingerprint(tmp_path):
@@ -10,11 +10,11 @@ def test_init_creates_files_and_fingerprint(tmp_path):
     state.init_state(tmp_path)
     assert state.is_managed(tmp_path) is True
 
-    sf = state.specflow_dir(tmp_path)
+    sf = state.specdrive_dir(tmp_path)
     assert (sf / state.STATE_FILE).is_file()
     assert (sf / state.DECISION_LOG_FILE).is_file()
     fp = json.loads((sf / state.FINGERPRINT_FILE).read_text())
-    assert fp["tool"] == "specflow"
+    assert fp["tool"] == "specdrive"
     assert fp["version"] == state.SCHEMA_VERSION
     assert "created" in fp
 
@@ -23,7 +23,7 @@ def test_default_state_shape(tmp_path):
     state.init_state(tmp_path)
     s = state.load_state(tmp_path)
     assert s["phase"] == state.PHASE_GOAL
-    assert s["specflow_version"] == state.SCHEMA_VERSION
+    assert s["specdrive_version"] == state.SCHEMA_VERSION
     for key in ("goal", "core_decision", "out_of_scope", "constraints",
                 "buckets", "current_bucket", "cross_check"):
         assert key in s
@@ -61,7 +61,7 @@ def test_append_decision_autonumbers_and_appends(tmp_path):
     assert state.append_decision(tmp_path, "first") == "DL-1  first"
     assert state.append_decision(tmp_path, "second") == "DL-2  second"
 
-    log = (state.specflow_dir(tmp_path) / state.DECISION_LOG_FILE).read_text()
+    log = (state.specdrive_dir(tmp_path) / state.DECISION_LOG_FILE).read_text()
     assert "DL-1  first" in log
     assert "DL-2  second" in log
     # append-only: header preserved

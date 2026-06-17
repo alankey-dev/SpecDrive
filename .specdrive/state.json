@@ -1,0 +1,11 @@
+{
+  "specdrive_version": "0.1.0",
+  "phase": "1-goal",
+  "goal": "",
+  "core_decision": "",
+  "out_of_scope": [],
+  "constraints": [],
+  "buckets": [],
+  "current_bucket": null,
+  "cross_check": "none"
+}
