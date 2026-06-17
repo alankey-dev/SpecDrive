@@ -6,45 +6,91 @@ goal. A portable, agent-agnostic methodology for LLM coding agents.
 specdrive runs a four-phase loop (find the goal, break it into buckets, build
 one bucket at a time, confirm done) and keeps a decision log so the build never
 quietly wanders off. It works inside any coding agent: the agent reads the
-playbook and follows it, while state lives in plain files any agent can read.
+playbook and follows it, and the state lives in plain files the agent reads and
+writes directly.
 
-## Install
+**No CLI in the loop.** Like [spec-kit](https://github.com/github/spec-kit),
+specdrive ships a tiny bootstrap CLI whose only job is to scaffold a project. The
+methodology itself runs entirely on committed Markdown + JSON files, so the agent
+never needs a `specdrive` binary on its PATH. That is what makes it work cleanly
+in web / cloud agents.
+
+## Install (the bootstrap CLI)
 
 ```sh
 pipx install specdrive
-# or
+# or run it without installing:
 uvx specdrive --help
 ```
+
+You only need this on the machine where you scaffold a project. The agent that
+later runs the methodology does **not** need specdrive installed.
 
 ## Quickstart
 
 ```sh
 cd your-project
-specdrive init                 # create .specdrive/ state + fingerprint
-specdrive install claude-code  # or: specdrive install generic
-specdrive status               # see phase, goal, buckets
+specdrive init --agent claude-code   # scaffold .specdrive/ + the agent adapter
+git add .specdrive AGENTS.md SPECDRIVE.md .claude && git commit -m "add specdrive"
 ```
 
-Then run the playbook in your agent: the `/specdrive` command if you installed
-the claude-code adapter, or point the agent at `SPECDRIVE.md` for the generic
-one.
+`init` creates a `.specdrive/` directory (state, decision log, a committed copy of
+the playbook, and a fingerprint) and installs the adapter for your agent. Then,
+in your agent, run the `/specdrive` command (Claude Code) or just tell it to
+"follow specdrive" — it reads `.specdrive/playbook.md` and drives the rest.
+
+Pick your agent with `--agent` (or run `specdrive install <agent>` later):
+
+| `--agent` | What it installs | How you invoke it |
+|-----------|------------------|-------------------|
+| `claude-code` | `.claude/commands/specdrive.md` | the `/specdrive` slash command |
+| `codex` | a managed block in `AGENTS.md` | tell Codex to "run specdrive" |
+| `pi-agent` | a managed block in `AGENTS.md` | tell pi-agent to "run specdrive" |
+| `generic` | `SPECDRIVE.md` at the repo root | point any agent at `SPECDRIVE.md` |
+
+The `AGENTS.md` adapters merge an idempotent block, so they never clobber your
+existing instructions, and Codex + pi-agent can share one file.
+
+## Using it with web / cloud agents
+
+This is the whole point of the bootstrap-only design: the agent runs specdrive
+from files in the repo, with nothing to install in the cloud environment.
+
+1. **Once, locally** (or in any environment with the CLI): scaffold and commit.
+
+   ```sh
+   specdrive init --agent claude-code   # or codex / pi-agent / generic
+   git add .specdrive .claude AGENTS.md SPECDRIVE.md
+   git commit -m "add specdrive" && git push
+   ```
+
+2. **In the web / cloud agent**: open the repo and run `/specdrive` (Claude Code
+   on the web) or tell the agent to "follow specdrive". It reads the committed
+   `.specdrive/playbook.md`, sees where things stand in `.specdrive/state.json`,
+   and continues — pausing at every checkpoint for your approval.
+
+Because all state is committed plain files, a build can pause in one session and
+resume in another, even across different agents.
+
+> No CLI at all? You can skip the bootstrap entirely: copy `SPECDRIVE.md` (run
+> `specdrive playbook` to print the methodology, or grab it from this repo) into
+> your project and tell the agent to follow it. It will create `.specdrive/`
+> itself on first run, exactly as the playbook describes.
 
 ## How it works
 
-Three parts, one source of truth:
+Two parts, committed to your repo:
 
-- **The playbook** (`specdrive playbook`). The methodology, written as direct
-  instructions to the agent.
-- **State files** in `.specdrive/`. `state.json` (progress), `decision-log.md`
-  (append-only log of locked decisions), and `fingerprint` (marks the project
-  as specdrive-managed). Any agent reads and writes these, so a build can pause
-  and resume across sessions and across agents.
-- **Adapters**. `specdrive install <agent>` drops a thin wrapper pointing the
-  agent at the playbook. Adapters embed the playbook at install time; re-run
-  with `--force` after an upgrade.
+- **The playbook** (`.specdrive/playbook.md`). The methodology, written as direct
+  instructions to the agent. `init` drops it into the project so it always
+  travels with the repo; `specdrive playbook` prints the canonical copy.
+- **State files** in `.specdrive/`: `state.json` (progress), `decision-log.md`
+  (append-only log of locked decisions), and `fingerprint` (marks the project as
+  specdrive-managed). The agent reads and writes these directly per the rules in
+  the playbook — no CLI, no daemon.
 
-The agent writes the code. specdrive orchestrates: it asks the questions,
-enforces the checkpoints, and keeps the log.
+The agent writes the code *and* keeps the state. specdrive is the discipline: it
+asks the questions, enforces the checkpoints, and keeps the log honest.
 
 ## The four phases
 
@@ -59,56 +105,25 @@ enforces the checkpoints, and keeps the log.
 4. **Definition of done.** Every bucket approved and the combined result clearly
    drives the core decision from Phase 1.
 
-## Commands
+## Cross-model check
+
+After each bucket, specdrive asks for a second opinion before you sign off. If a
+second-model tool such as
+[codex-mcp](https://github.com/tuannvm/codex-mcp-server) is available, the
+playbook routes the bucket output through it and surfaces any disagreement.
+Otherwise the agent self-critiques. The method used is recorded in `state.json`
+under `cross_check`.
+
+## CLI reference
+
+The CLI only scaffolds and inspects; it never drives the workflow.
 
 | Command | What it does |
 |---------|--------------|
-| `specdrive init [path]` | Create `.specdrive/` state, log, and fingerprint. `--force` resets. |
-| `specdrive status [path]` | Show phase, goal, core decision, buckets, cross-check mode. |
-| `specdrive next [path]` | Show what to do next (and the command to run). |
-| `specdrive goal set "<text>"` | Set the Phase 1 goal. |
-| `specdrive decision set "<text>"` | Set the core decision. |
-| `specdrive scope add "<text>"` / `constraint add "<text>"` | Append to the out-of-scope / constraints list. |
-| `specdrive phase <name>` | Advance the phase (forward-skips are blocked). |
-| `specdrive bucket add "<name>"` | Append a bucket. |
-| `specdrive bucket start <id>` / `bucket approve <id>` | Move a bucket through building to approved. |
-| `specdrive log-add "<text>"` | Append a line to the decision log. |
-| `specdrive log [path]` | Print the decision log. |
-| `specdrive validate [path]` | Check `state.json` is structurally sound. |
-| `specdrive playbook` | Print the methodology playbook. |
-| `specdrive install <agent> [path]` | Install an agent adapter (`claude-code`, `generic`). `--force` overwrites. |
-| `specdrive xcheck <mode> [path]` | Record the cross-model check mode (`codex-mcp`, `self-critique`, `none`). |
-
-Drive a whole session through these commands; no hand-editing of state. The
-agent runs `specdrive next` to see what is due, then the suggested command:
-
-```sh
-specdrive goal set "a CLI that does X for Y"
-specdrive decision set "can a user do X in one command?"
-specdrive phase 2-buckets
-specdrive bucket add "parser"
-specdrive bucket add "output formatter"
-specdrive phase 3-build
-specdrive bucket start 1   # build it...
-specdrive bucket approve 1
-```
-
-## Cross-model check
-
-After each bucket, specdrive asks the agent for a second opinion before you sign
-off. If a second-model tool such as
-[codex-mcp](https://github.com/tuannvm/codex-mcp-server) is available, the
-playbook routes the bucket output through it, surfaces any disagreement, and
-records the mode with `specdrive xcheck codex-mcp`. Otherwise the agent
-self-critiques and records `specdrive xcheck self-critique`.
-
-## Supported agents
-
-- **claude-code**. Installs `.claude/commands/specdrive.md` (use `/specdrive`).
-- **generic**. Installs `SPECDRIVE.md` at the project root; point any agent at it.
-
-opencode and pi-agent work today via the generic adapter; native adapters are
-planned.
+| `specdrive init [path] [--agent <agent>] [--force]` | Create `.specdrive/` state, log, playbook, and fingerprint; optionally install an adapter. |
+| `specdrive install <agent> [path] [--force]` | Install an agent adapter (`claude-code`, `codex`, `pi-agent`, `generic`). |
+| `specdrive playbook` | Print the canonical methodology playbook. |
+| `specdrive validate [path]` | Check `.specdrive/state.json` is structurally sound. |
 
 ## Development
 

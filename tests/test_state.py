@@ -13,6 +13,10 @@ def test_init_creates_files_and_fingerprint(tmp_path):
     sf = state.specdrive_dir(tmp_path)
     assert (sf / state.STATE_FILE).is_file()
     assert (sf / state.DECISION_LOG_FILE).is_file()
+    # The playbook is committed into the project so it travels with the repo.
+    playbook = (sf / state.PLAYBOOK_FILE).read_text()
+    assert playbook == state.packaged_playbook()
+    assert "# specdrive playbook" in playbook
     fp = json.loads((sf / state.FINGERPRINT_FILE).read_text())
     assert fp["tool"] == "specdrive"
     assert fp["version"] == state.SCHEMA_VERSION
@@ -54,22 +58,3 @@ def test_save_load_round_trip(tmp_path):
 def test_load_missing_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         state.load_state(tmp_path)
-
-
-def test_append_decision_autonumbers_and_appends(tmp_path):
-    state.init_state(tmp_path)
-    assert state.append_decision(tmp_path, "first") == "DL-1  first"
-    assert state.append_decision(tmp_path, "second") == "DL-2  second"
-
-    log = (state.specdrive_dir(tmp_path) / state.DECISION_LOG_FILE).read_text()
-    assert "DL-1  first" in log
-    assert "DL-2  second" in log
-    # append-only: header preserved
-    assert "decision log" in log
-
-
-def test_append_decision_continues_numbering_across_calls(tmp_path):
-    state.init_state(tmp_path)
-    for i in range(5):
-        state.append_decision(tmp_path, f"d{i}")
-    assert state.append_decision(tmp_path, "next") == "DL-6  next"
