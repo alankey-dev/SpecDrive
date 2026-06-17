@@ -91,3 +91,72 @@ def test_xcheck_bad_mode_rejected(tmp_path):
     main(["init", str(tmp_path)])
     with pytest.raises(SystemExit):  # argparse choices reject
         main(["xcheck", "bogus", str(tmp_path)])
+
+
+# --- v2 commands ---
+
+def _p(tmp_path):
+    return str(tmp_path)
+
+
+def test_mutation_commands_drive_a_session(tmp_path, capsys):
+    p = _p(tmp_path)
+    main(["init", p])
+    for argv in (["goal", "set", "g", p], ["decision", "set", "d", p],
+                 ["scope", "add", "s", p], ["constraint", "add", "c", p],
+                 ["phase", "2-buckets", p], ["bucket", "add", "alpha", p],
+                 ["phase", "3-build", p], ["bucket", "start", "1", p],
+                 ["bucket", "approve", "1", p]):
+        assert main(argv) == 0, argv
+    capsys.readouterr()
+    s = state.load_state(tmp_path)
+    assert s["goal"] == "g" and s["core_decision"] == "d"
+    assert s["buckets"][0]["status"] == "approved"
+
+
+def test_next_command(tmp_path, capsys):
+    main(["init", str(tmp_path)])
+    capsys.readouterr()
+    assert main(["next", str(tmp_path)]) == 0
+    assert "Phase 1" in capsys.readouterr().out
+
+
+def test_log_add_command(tmp_path, capsys):
+    main(["init", str(tmp_path)])
+    capsys.readouterr()
+    assert main(["log-add", "a note", str(tmp_path)]) == 0
+    assert "DL-1  a note" in capsys.readouterr().out
+
+
+def test_phase_forward_skip_cli_returns_1(tmp_path, capsys):
+    main(["init", str(tmp_path)])
+    capsys.readouterr()
+    assert main(["phase", "done", str(tmp_path)]) == 1
+    assert "cannot skip" in capsys.readouterr().err
+
+
+def test_bucket_approve_before_start_cli_returns_1(tmp_path, capsys):
+    p = _p(tmp_path)
+    main(["init", p])
+    main(["phase", "2-buckets", p]); main(["bucket", "add", "a", p])
+    main(["phase", "3-build", p])
+    capsys.readouterr()
+    assert main(["bucket", "approve", "1", p]) == 1
+    assert "not building" in capsys.readouterr().err
+
+
+def test_validate_command_clean(tmp_path, capsys):
+    main(["init", str(tmp_path)])
+    capsys.readouterr()
+    assert main(["validate", str(tmp_path)]) == 0
+    assert "valid" in capsys.readouterr().out
+
+
+def test_corrupt_state_gives_clean_error_not_traceback(tmp_path, capsys):
+    import json
+    main(["init", str(tmp_path)])
+    pth = state.specdrive_dir(tmp_path) / state.STATE_FILE
+    d = json.loads(pth.read_text()); d["phase"] = "bogus"; pth.write_text(json.dumps(d))
+    capsys.readouterr()
+    assert main(["status", str(tmp_path)]) == 1  # global StateError handling
+    assert "error:" in capsys.readouterr().err

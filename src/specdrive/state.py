@@ -28,7 +28,16 @@ PHASE_BUCKETS = "2-buckets"
 PHASE_BUILD = "3-build"
 PHASE_DONE = "done"
 
+# Ordered for forward-skip detection (index = progress).
+PHASES = (PHASE_GOAL, PHASE_BUCKETS, PHASE_BUILD, PHASE_DONE)
+
+BUCKET_STATUSES = ("pending", "building", "review", "approved")
+
 _DL_LINE = re.compile(r"^DL-(\d+)\b")
+
+
+class StateError(ValueError):
+    """Raised when state.json is structurally invalid."""
 
 
 def _now() -> str:
@@ -105,13 +114,65 @@ def init_state(root: Path | str, *, force: bool = False) -> dict[str, Any]:
     return state
 
 
+def validate(s: dict[str, Any]) -> list[str]:
+    """Pure: return a list of structural problems with a state dict (empty = ok)."""
+    errors: list[str] = []
+    if not isinstance(s, dict):
+        return ["state is not an object"]
+
+    for key, typ in (("goal", str), ("core_decision", str),
+                     ("out_of_scope", list), ("constraints", list),
+                     ("buckets", list)):
+        if key not in s:
+            errors.append(f"missing key: {key}")
+        elif not isinstance(s[key], typ):
+            errors.append(f"{key} must be {typ.__name__}")
+
+    if s.get("phase") not in PHASES:
+        errors.append(f"phase must be one of {PHASES}")
+    if s.get("cross_check") not in CROSS_CHECK_MODES:
+        errors.append(f"cross_check must be one of {CROSS_CHECK_MODES}")
+
+    ids = []
+    for i, b in enumerate(s.get("buckets", []) if isinstance(s.get("buckets"), list) else []):
+        if not isinstance(b, dict):
+            errors.append(f"bucket[{i}] is not an object")
+            continue
+        if not isinstance(b.get("id"), int):
+            errors.append(f"bucket[{i}] missing integer id")
+        else:
+            ids.append(b["id"])
+        if not isinstance(b.get("name"), str) or not b.get("name"):
+            errors.append(f"bucket[{i}] missing name")
+        if b.get("status") not in BUCKET_STATUSES:
+            errors.append(f"bucket[{i}] status must be one of {BUCKET_STATUSES}")
+    if len(ids) != len(set(ids)):
+        errors.append("duplicate bucket ids")
+
+    cur = s.get("current_bucket")
+    if cur is not None and cur not in ids:
+        errors.append(f"current_bucket {cur} does not match any bucket id")
+
+    return errors
+
+
 def load_state(root: Path | str) -> dict[str, Any]:
-    """Load state.json. Raises FileNotFoundError if not managed."""
+    """Load and validate state.json.
+
+    Raises FileNotFoundError if not managed, StateError if structurally invalid.
+    """
     path = _state_path(root)
     if not path.is_file():
         raise FileNotFoundError(f"no specdrive state at {path}; run init first")
     with path.open(encoding="utf-8") as fh:
-        return json.load(fh)
+        try:
+            data = json.load(fh)
+        except json.JSONDecodeError as exc:
+            raise StateError(f"state.json is not valid JSON: {exc}") from exc
+    problems = validate(data)
+    if problems:
+        raise StateError("invalid state.json: " + "; ".join(problems))
+    return data
 
 
 def save_state(root: Path | str, data: dict[str, Any]) -> None:

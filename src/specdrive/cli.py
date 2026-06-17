@@ -12,7 +12,7 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 
-from specdrive import adapters, state
+from specdrive import adapters, mutate, state
 
 
 def _read_playbook() -> str:
@@ -101,6 +101,128 @@ def cmd_xcheck(args: argparse.Namespace) -> int:
     return 0
 
 
+def _require_managed(root: Path) -> bool:
+    if not state.is_managed(root):
+        print(f"not specdrive-managed: {root}", file=sys.stderr)
+        print("hint: run `specdrive init` first.", file=sys.stderr)
+        return False
+    return True
+
+
+def cmd_goal_set(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    mutate.set_goal(root, args.text)
+    print(f"goal set: {args.text}")
+    return 0
+
+
+def cmd_decision_set(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    mutate.set_decision(root, args.text)
+    print(f"core decision set: {args.text}")
+    return 0
+
+
+def cmd_scope_add(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    mutate.add_scope(root, args.text)
+    print(f"out-of-scope added: {args.text}")
+    return 0
+
+
+def cmd_constraint_add(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    mutate.add_constraint(root, args.text)
+    print(f"constraint added: {args.text}")
+    return 0
+
+
+def cmd_phase(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    try:
+        mutate.set_phase(root, args.phase)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"phase set to {args.phase}")
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    try:
+        state.load_state(root)
+    except state.StateError as exc:
+        print(f"invalid: {exc}", file=sys.stderr)
+        return 1
+    print("state is valid")
+    return 0
+
+
+def cmd_bucket_add(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    new_id = mutate.add_bucket(root, args.name)
+    print(f"bucket {new_id} added: {args.name}")
+    return 0
+
+
+def cmd_bucket_start(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    try:
+        b = mutate.start_bucket(root, args.id)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"bucket {b['id']} building: {b['name']}")
+    return 0
+
+
+def cmd_bucket_approve(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    try:
+        b = mutate.approve_bucket(root, args.id)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"bucket {b['id']} approved: {b['name']}")
+    return 0
+
+
+def cmd_next(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    print(mutate.next_step(state.load_state(root)))
+    return 0
+
+
+def cmd_log_add(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    if not _require_managed(root):
+        return 1
+    line = state.append_decision(root, args.text)
+    print(line)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="specdrive",
@@ -117,6 +239,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_status = sub.add_parser("status", help="show current phase, goal, and buckets")
     p_status.add_argument("path", nargs="?", default=".", help="project root (default: .)")
     p_status.set_defaults(func=cmd_status)
+
+    p_next = sub.add_parser("next", help="show what to do next")
+    p_next.add_argument("path", nargs="?", default=".", help="project root (default: .)")
+    p_next.set_defaults(func=cmd_next)
+
+    p_validate = sub.add_parser("validate", help="check state.json is structurally valid")
+    p_validate.add_argument("path", nargs="?", default=".", help="project root (default: .)")
+    p_validate.set_defaults(func=cmd_validate)
 
     p_playbook = sub.add_parser("playbook", help="print the specdrive playbook")
     p_playbook.set_defaults(func=cmd_playbook)
@@ -136,13 +266,82 @@ def build_parser() -> argparse.ArgumentParser:
     p_xcheck.add_argument("path", nargs="?", default=".", help="project root (default: .)")
     p_xcheck.set_defaults(func=cmd_xcheck)
 
+    def _path(p):
+        p.add_argument("path", nargs="?", default=".", help="project root (default: .)")
+
+    # goal set "<text>"
+    p_goal = sub.add_parser("goal", help="set the Phase 1 goal")
+    goal_sub = p_goal.add_subparsers(dest="goalcmd", required=True)
+    p_goal_set = goal_sub.add_parser("set", help="set the goal text")
+    p_goal_set.add_argument("text", help="the goal")
+    _path(p_goal_set)
+    p_goal_set.set_defaults(func=cmd_goal_set)
+
+    # decision set "<text>"
+    p_dec = sub.add_parser("decision", help="set the core decision")
+    dec_sub = p_dec.add_subparsers(dest="decisioncmd", required=True)
+    p_dec_set = dec_sub.add_parser("set", help="set the core decision text")
+    p_dec_set.add_argument("text", help="the core decision")
+    _path(p_dec_set)
+    p_dec_set.set_defaults(func=cmd_decision_set)
+
+    # scope add "<text>"
+    p_scope = sub.add_parser("scope", help="manage the out-of-scope list")
+    scope_sub = p_scope.add_subparsers(dest="scopecmd", required=True)
+    p_scope_add = scope_sub.add_parser("add", help="append an out-of-scope item")
+    p_scope_add.add_argument("text", help="the item")
+    _path(p_scope_add)
+    p_scope_add.set_defaults(func=cmd_scope_add)
+
+    # constraint add "<text>"
+    p_con = sub.add_parser("constraint", help="manage the constraints list")
+    con_sub = p_con.add_subparsers(dest="constraintcmd", required=True)
+    p_con_add = con_sub.add_parser("add", help="append a constraint")
+    p_con_add.add_argument("text", help="the constraint")
+    _path(p_con_add)
+    p_con_add.set_defaults(func=cmd_constraint_add)
+
+    # phase <name>
+    p_phase = sub.add_parser("phase", help="set the current phase")
+    p_phase.add_argument("phase", choices=(state.PHASE_GOAL, state.PHASE_BUCKETS,
+                                           state.PHASE_BUILD, state.PHASE_DONE))
+    _path(p_phase)
+    p_phase.set_defaults(func=cmd_phase)
+
+    # bucket add/start/approve
+    p_bucket = sub.add_parser("bucket", help="manage buckets")
+    bucket_sub = p_bucket.add_subparsers(dest="bucketcmd", required=True)
+    p_bucket_add = bucket_sub.add_parser("add", help="append a bucket")
+    p_bucket_add.add_argument("name", help="bucket name")
+    _path(p_bucket_add)
+    p_bucket_add.set_defaults(func=cmd_bucket_add)
+    p_bucket_start = bucket_sub.add_parser("start", help="mark a bucket building")
+    p_bucket_start.add_argument("id", type=int, help="bucket id")
+    _path(p_bucket_start)
+    p_bucket_start.set_defaults(func=cmd_bucket_start)
+    p_bucket_approve = bucket_sub.add_parser("approve", help="mark a bucket approved")
+    p_bucket_approve.add_argument("id", type=int, help="bucket id")
+    _path(p_bucket_approve)
+    p_bucket_approve.set_defaults(func=cmd_bucket_approve)
+
+    # log-add "<text>"  (sibling of `log`; appends a decision line)
+    p_logadd = sub.add_parser("log-add", help="append a line to the decision log")
+    p_logadd.add_argument("text", help="the decision")
+    _path(p_logadd)
+    p_logadd.set_defaults(func=cmd_log_add)
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except state.StateError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        print("hint: run `specdrive validate` to inspect state.json.", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

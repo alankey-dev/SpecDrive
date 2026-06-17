@@ -66,10 +66,33 @@ questions, enforces the checkpoints, and keeps the log.
 |---------|--------------|
 | `specdrive init [path]` | Create `.specdrive/` state, log, and fingerprint. `--force` resets. |
 | `specdrive status [path]` | Show phase, goal, core decision, buckets, cross-check mode. |
+| `specdrive next [path]` | Show what to do next (and the command to run). |
+| `specdrive goal set "<text>"` | Set the Phase 1 goal. |
+| `specdrive decision set "<text>"` | Set the core decision. |
+| `specdrive scope add "<text>"` / `constraint add "<text>"` | Append to the out-of-scope / constraints list. |
+| `specdrive phase <name>` | Advance the phase (forward-skips are blocked). |
+| `specdrive bucket add "<name>"` | Append a bucket. |
+| `specdrive bucket start <id>` / `bucket approve <id>` | Move a bucket through building → approved. |
+| `specdrive log-add "<text>"` | Append a line to the decision log. |
+| `specdrive log [path]` | Print the decision log. |
+| `specdrive validate [path]` | Check `state.json` is structurally sound. |
 | `specdrive playbook` | Print the methodology playbook. |
 | `specdrive install <agent> [path]` | Install an agent adapter (`claude-code`, `generic`). `--force` overwrites. |
-| `specdrive log [path]` | Print the decision log. |
 | `specdrive xcheck <mode> [path]` | Record the cross-model check mode (`codex-mcp`, `self-critique`, `none`). |
+
+You drive a whole session through these commands — no hand-editing of state. The
+agent runs `specdrive next` to see what is due, then the suggested command:
+
+```sh
+specdrive goal set "a CLI that does X for Y"
+specdrive decision set "can a user do X in one command?"
+specdrive phase 2-buckets
+specdrive bucket add "parser"
+specdrive bucket add "output formatter"
+specdrive phase 3-build
+specdrive bucket start 1   # build it...
+specdrive bucket approve 1
+```
 
 ## Cross-model check
 

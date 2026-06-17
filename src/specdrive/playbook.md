@@ -63,13 +63,26 @@ Layout (created by `specdrive init`, implemented in the State bucket):
 }
 ```
 
+**Drive state through the CLI, never by hand-editing `state.json`.** The commands
+validate input and refuse illegal moves, so they keep the run consistent:
+
+| To... | Run |
+|-------|-----|
+| see where you are / what is due | `specdrive status` / `specdrive next` |
+| set the goal / core decision | `specdrive goal set "<text>"` / `specdrive decision set "<text>"` |
+| record scope / constraints | `specdrive scope add "<text>"` / `specdrive constraint add "<text>"` |
+| advance the phase | `specdrive phase <1-goal\|2-buckets\|3-build\|done>` |
+| add / start / approve a bucket | `specdrive bucket add "<name>"` / `bucket start <id>` / `bucket approve <id>` |
+| append a decision-log line | `specdrive log-add "<text>"` |
+| check state is sound | `specdrive validate` |
+
 Rules:
 - If `.specdrive/` is absent, you are starting fresh: go to Phase 1.
-- If it exists, load it, summarise where things stand, and resume at `phase` /
-  `current_bucket`.
-- Every locked decision gets one line appended to `decision-log.md` as
-  `DL-N  <decision>`. Never rewrite past lines; only append. Contradictions are
-  caught by reading the log back at checkpoints.
+- If it exists, run `specdrive status` and `specdrive next`, summarise where
+  things stand, and resume.
+- Decision-log lines are append-only (`DL-N  <decision>`). The meaningful
+  mutation commands append one automatically; use `log-add` for anything else.
+  Contradictions are caught by reading the log back at checkpoints.
 
 ---
 
@@ -87,9 +100,8 @@ core decision the project must drive.
 - When you understand, **restate** the goal, the core decision, the out-of-scope
   list, and the constraints in your own words. Wait for the user to confirm or
   correct before moving on.
-- On confirmation: write `goal`, `core_decision`, `out_of_scope`, `constraints`
-  to `state.json`, append the locked decisions to `decision-log.md`, set
-  `phase = "2-buckets"`.
+- On confirmation: record it with `specdrive goal set`, `specdrive decision set`,
+  `specdrive scope add`, `specdrive constraint add`, then `specdrive phase 2-buckets`.
 
 Do not write any project code in Phase 1.
 
@@ -106,27 +118,29 @@ delivers one reviewable piece of value and can be built on its own.
   core value, and propose gating it on the earlier buckets proving out.
 - Do not start building until the user approves the breakdown. They may reorder,
   cut, or add.
-- On approval: write the `buckets` array to `state.json`, set `current_bucket` to
-  the first, append a decision-log line, set `phase = "3-build"`.
+- On approval: add each bucket with `specdrive bucket add "<name>"`, then
+  `specdrive phase 3-build`.
 
 ---
 
 ## Phase 3 — Build one bucket at a time
 
-For the `current_bucket`, run this loop:
+Use `specdrive next` at any point to see which step is due. For the
+`current_bucket`, run this loop:
 
 1. **Plan.** Present a short plan for the bucket. List concrete deliverables and
    any design choices that need a decision. Wait for the user's green light.
-2. **Build.** Build only that bucket. Set its status to `building`.
-3. **Checkpoint.** Stop and show the output for review. Set status to `review`.
+2. **Build.** Run `specdrive bucket start <id>`, then build only that bucket.
+3. **Checkpoint.** Stop and show the output for review.
 4. **Drift-check.** Restate how this bucket serves the Phase 1 goal and core
    decision. Flag anything that feels like drift from what was agreed.
 5. **Cross-check.** Run the cross-model check (see below).
 6. **Approve.** Wait for the user's clear approval. If they ask for changes,
-   revise and check in again before moving on. On approval, set status to
-   `approved`, append a decision-log line, advance `current_bucket`.
+   revise and check in again before moving on. On approval, run
+   `specdrive bucket approve <id>` (it advances `current_bucket` automatically).
 
-Never start the next bucket before the current one is approved.
+Never start the next bucket before the current one is approved. When all buckets
+are approved, run `specdrive phase done`.
 
 ---
 
@@ -177,4 +191,4 @@ drives the core decision set in Phase 1.
 Before wrapping:
 - Summarise what was built.
 - Confirm it matches the original intent and core decision.
-- Set `phase = "done"` in `state.json` and append a final decision-log line.
+- Run `specdrive phase done` and `specdrive log-add "<final note>"`.
