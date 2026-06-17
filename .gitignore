@@ -17,5 +17,9 @@ venv/
 .ruff_cache/
 .mypy_cache/
 
+# specdrive's own dogfood artifacts (generated; not versioned)
+.specdrive/
+.claude/commands/specdrive.md
+
 # OS
 .DS_Store
