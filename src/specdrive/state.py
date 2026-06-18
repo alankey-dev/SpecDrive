@@ -17,6 +17,9 @@ SCHEMA_VERSION = "0.1.0"
 
 # Directory layout (see "State contract" in playbook.md).
 DIR_NAME = ".specdrive"
+# Pre-rename state dir from the old `specflow` CLI; kept so `uninstall` can
+# clean up projects scaffolded by older versions.
+LEGACY_DIR_NAME = ".specflow"
 STATE_FILE = "state.json"
 DECISION_LOG_FILE = "decision-log.md"
 FINGERPRINT_FILE = "fingerprint"

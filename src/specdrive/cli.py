@@ -8,6 +8,7 @@ playbook.md; `specdrive playbook` prints it so an agent can read and follow it.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from importlib.resources import files
 from pathlib import Path
@@ -83,6 +84,38 @@ def cmd_install(args: argparse.Namespace) -> int:
         return 1
     print(f"installed {args.agent} adapter at {target}")
     print(adapters.ADAPTERS[args.agent].note)
+    return 0
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    root = Path(args.path)
+    targets: list[Path] = []
+    if not args.adapters_only:
+        for d in (state.specdrive_dir(root), root / state.LEGACY_DIR_NAME):
+            if d.is_dir():
+                targets.append(d)
+    if not args.state_only:
+        targets += [p for p in adapters.adapter_paths(root) if p.is_file()]
+    if not targets:
+        print(f"nothing to uninstall in {root}")
+        return 0
+    print("will remove:")
+    for t in targets:
+        print(f"  {t}")
+    if not args.yes:
+        try:
+            reply = input("proceed? [y/N] ").strip().lower()
+        except EOFError:
+            reply = ""
+        if reply not in ("y", "yes"):
+            print("aborted", file=sys.stderr)
+            return 1
+    for t in targets:
+        if t.is_dir():
+            shutil.rmtree(t)
+        else:
+            t.unlink()
+    print(f"removed {len(targets)} item(s)")
     return 0
 
 
@@ -256,6 +289,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_install.add_argument("path", nargs="?", default=".", help="project root (default: .)")
     p_install.add_argument("--force", action="store_true", help="overwrite existing adapter")
     p_install.set_defaults(func=cmd_install)
+
+    p_uninstall = sub.add_parser(
+        "uninstall", help="remove specdrive state and adapters from a project"
+    )
+    p_uninstall.add_argument("path", nargs="?", default=".", help="project root (default: .)")
+    p_uninstall.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    uninstall_what = p_uninstall.add_mutually_exclusive_group()
+    uninstall_what.add_argument(
+        "--state-only", action="store_true", help="remove only .specdrive/ state, keep adapters"
+    )
+    uninstall_what.add_argument(
+        "--adapters-only", action="store_true", help="remove only adapters, keep .specdrive/ state"
+    )
+    p_uninstall.set_defaults(func=cmd_uninstall)
 
     p_log = sub.add_parser("log", help="print the decision log")
     p_log.add_argument("path", nargs="?", default=".", help="project root (default: .)")

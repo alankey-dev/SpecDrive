@@ -160,3 +160,59 @@ def test_corrupt_state_gives_clean_error_not_traceback(tmp_path, capsys):
     capsys.readouterr()
     assert main(["status", str(tmp_path)]) == 1  # global StateError handling
     assert "error:" in capsys.readouterr().err
+
+
+def test_uninstall_removes_state_and_adapters(tmp_path, capsys):
+    p = str(tmp_path)
+    main(["init", p]); main(["install", "claude-code", p]); main(["install", "generic", p])
+    capsys.readouterr()
+    assert main(["uninstall", p, "--yes"]) == 0
+    assert not state.specdrive_dir(tmp_path).exists()
+    assert not (tmp_path / "SPECDRIVE.md").exists()
+    assert not (tmp_path / ".claude/commands/specdrive.md").exists()
+
+
+def test_uninstall_adapters_only_keeps_state(tmp_path, capsys):
+    p = str(tmp_path)
+    main(["init", p]); main(["install", "generic", p])
+    capsys.readouterr()
+    assert main(["uninstall", p, "--yes", "--adapters-only"]) == 0
+    assert state.is_managed(tmp_path)
+    assert not (tmp_path / "SPECDRIVE.md").exists()
+
+
+def test_uninstall_state_only_keeps_adapters(tmp_path, capsys):
+    p = str(tmp_path)
+    main(["init", p]); main(["install", "generic", p])
+    capsys.readouterr()
+    assert main(["uninstall", p, "--yes", "--state-only"]) == 0
+    assert not state.specdrive_dir(tmp_path).exists()
+    assert (tmp_path / "SPECDRIVE.md").is_file()
+
+
+def test_uninstall_removes_legacy_specflow_paths(tmp_path, capsys):
+    legacy_dir = tmp_path / state.LEGACY_DIR_NAME
+    legacy_dir.mkdir(); (legacy_dir / "state.json").write_text("{}")
+    (tmp_path / "SPECFLOW.md").write_text("old")
+    cmd = tmp_path / ".claude/commands"; cmd.mkdir(parents=True)
+    (cmd / "specflow.md").write_text("old")
+    capsys.readouterr()
+    assert main(["uninstall", str(tmp_path), "--yes"]) == 0
+    assert not legacy_dir.exists()
+    assert not (tmp_path / "SPECFLOW.md").exists()
+    assert not (cmd / "specflow.md").exists()
+
+
+def test_uninstall_nothing_to_do(tmp_path, capsys):
+    assert main(["uninstall", str(tmp_path), "--yes"]) == 0
+    assert "nothing to uninstall" in capsys.readouterr().out
+
+
+def test_uninstall_abort_on_no(tmp_path, capsys, monkeypatch):
+    p = str(tmp_path)
+    main(["init", p])
+    capsys.readouterr()
+    monkeypatch.setattr("builtins.input", lambda _="": "n")
+    assert main(["uninstall", p]) == 1
+    assert state.is_managed(tmp_path)
+    assert "aborted" in capsys.readouterr().err

@@ -67,6 +67,22 @@ ADAPTERS: dict[str, Adapter] = {
 }
 
 
+# Pre-rename adapter paths from the old `specflow` CLI. Listed so `uninstall`
+# can clean up projects scaffolded by older versions.
+LEGACY_ADAPTER_PATHS: tuple[str, ...] = (
+    ".claude/commands/specflow.md",
+    "SPECFLOW.md",
+)
+
+
+def adapter_paths(root: Path | str) -> list[Path]:
+    """Every adapter file specdrive may have written, current and legacy."""
+    root = Path(root)
+    paths = [root / a.relative_path for a in ADAPTERS.values()]
+    paths += [root / p for p in LEGACY_ADAPTER_PATHS]
+    return paths
+
+
 def install_adapter(agent: str, root: Path | str, *, force: bool = False) -> Path:
     """Render and write the adapter for `agent` into the project. Returns its path."""
     if agent not in ADAPTERS:

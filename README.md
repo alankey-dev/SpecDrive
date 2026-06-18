@@ -77,6 +77,7 @@ enforces the checkpoints, and keeps the log.
 | `specdrive validate [path]` | Check `state.json` is structurally sound. |
 | `specdrive playbook` | Print the methodology playbook. |
 | `specdrive install <agent> [path]` | Install an agent adapter (`claude-code`, `generic`). `--force` overwrites. |
+| `specdrive uninstall [path]` | Remove `.specdrive/` state and adapters (incl. legacy `specflow` ones). `--yes` skips the prompt; `--state-only` / `--adapters-only` narrow it. |
 | `specdrive xcheck <mode> [path]` | Record the cross-model check mode (`codex-mcp`, `self-critique`, `none`). |
 
 Drive a whole session through these commands; no hand-editing of state. The
