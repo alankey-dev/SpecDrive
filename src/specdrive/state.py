@@ -8,17 +8,18 @@ stays authoritative and consistent.
 from __future__ import annotations
 
 import json
-import re
 from datetime import datetime, timezone
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = "0.1.0"
+SCHEMA_VERSION = "0.2.0"
 
 # Directory layout (see "State contract" in playbook.md).
 DIR_NAME = ".specdrive"
 STATE_FILE = "state.json"
 DECISION_LOG_FILE = "decision-log.md"
+PLAYBOOK_FILE = "playbook.md"
 FINGERPRINT_FILE = "fingerprint"
 
 CROSS_CHECK_MODES = ("codex-mcp", "self-critique", "none")
@@ -32,8 +33,6 @@ PHASE_DONE = "done"
 PHASES = (PHASE_GOAL, PHASE_BUCKETS, PHASE_BUILD, PHASE_DONE)
 
 BUCKET_STATUSES = ("pending", "building", "review", "approved")
-
-_DL_LINE = re.compile(r"^DL-(\d+)\b")
 
 
 class StateError(ValueError):
@@ -56,8 +55,17 @@ def _log_path(root: Path | str) -> Path:
     return specdrive_dir(root) / DECISION_LOG_FILE
 
 
+def _playbook_path(root: Path | str) -> Path:
+    return specdrive_dir(root) / PLAYBOOK_FILE
+
+
 def _fingerprint_path(root: Path | str) -> Path:
     return specdrive_dir(root) / FINGERPRINT_FILE
+
+
+def packaged_playbook() -> str:
+    """The canonical playbook shipped with this package."""
+    return (files("specdrive") / PLAYBOOK_FILE).read_text(encoding="utf-8")
 
 
 def default_state() -> dict[str, Any]:
@@ -101,6 +109,11 @@ def init_state(root: Path | str, *, force: bool = False) -> dict[str, Any]:
             "Append-only. One locked decision per line as `DL-N  <decision>`.\n\n",
             encoding="utf-8",
         )
+
+    # Commit the playbook into the project so the methodology travels with the
+    # repo and is available to any agent without the CLI being installed.
+    if not _playbook_path(root).exists() or force:
+        _playbook_path(root).write_text(packaged_playbook(), encoding="utf-8")
 
     fingerprint = {
         "tool": "specdrive",
@@ -182,20 +195,3 @@ def save_state(root: Path | str, data: dict[str, Any]) -> None:
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
-
-
-def _next_dl_number(log_text: str) -> int:
-    nums = [int(m.group(1)) for line in log_text.splitlines() if (m := _DL_LINE.match(line))]
-    return max(nums, default=0) + 1
-
-
-def append_decision(root: Path | str, text: str) -> str:
-    """Append an auto-numbered DL-N line to decision-log.md. Returns the line."""
-    path = _log_path(root)
-    existing = path.read_text(encoding="utf-8") if path.is_file() else ""
-    n = _next_dl_number(existing)
-    line = f"DL-{n}  {text.strip()}"
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    path.write_text(existing + line + "\n", encoding="utf-8")
-    return line

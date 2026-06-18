@@ -1,45 +1,31 @@
+import json
+
 import pytest
 
 from specdrive import state
 from specdrive.cli import main
 
 
-def test_init_then_status(tmp_path, capsys):
+def test_init_scaffolds_state_and_playbook(tmp_path, capsys):
     assert main(["init", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "initialised" in out
-
-    assert main(["status", str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert "phase: 1-goal" in out
-
-
-def test_status_unmanaged_returns_1(tmp_path, capsys):
-    assert main(["status", str(tmp_path)]) == 1
-    assert "not specdrive-managed" in capsys.readouterr().out
+    assert state.is_managed(tmp_path)
+    sf = state.specdrive_dir(tmp_path)
+    assert (sf / state.STATE_FILE).is_file()
+    assert (sf / state.PLAYBOOK_FILE).is_file()
 
 
 def test_init_refuses_without_force(tmp_path, capsys):
     main(["init", str(tmp_path)])
     capsys.readouterr()
     assert main(["init", str(tmp_path)]) == 1
-    err = capsys.readouterr().err
-    assert "--force" in err
+    assert "--force" in capsys.readouterr().err
 
 
-def test_status_shows_buckets(tmp_path, capsys):
-    main(["init", str(tmp_path)])
-    s = state.load_state(tmp_path)
-    s["buckets"] = [{"id": 1, "name": "alpha", "status": "approved"},
-                    {"id": 2, "name": "beta", "status": "building"}]
-    s["current_bucket"] = 2
-    state.save_state(tmp_path, s)
-    capsys.readouterr()
-
-    main(["status", str(tmp_path)])
-    out = capsys.readouterr().out
-    assert "alpha" in out and "beta" in out
-    assert "> 2. beta" in out  # current-bucket marker
+def test_init_with_agent_installs_adapter(tmp_path, capsys):
+    assert main(["init", str(tmp_path), "--agent", "claude-code"]) == 0
+    assert (tmp_path / ".claude" / "commands" / "specdrive.md").is_file()
 
 
 def test_playbook_prints(capsys):
@@ -47,19 +33,10 @@ def test_playbook_prints(capsys):
     assert "# specdrive playbook" in capsys.readouterr().out
 
 
-def test_log_prints(tmp_path, capsys):
-    main(["init", str(tmp_path)])
-    state.append_decision(tmp_path, "a decision")
-    capsys.readouterr()
-    assert main(["log", str(tmp_path)]) == 0
-    assert "DL-1  a decision" in capsys.readouterr().out
-
-
 def test_install_via_cli(tmp_path, capsys):
     assert main(["install", "generic", str(tmp_path)]) == 0
     assert (tmp_path / "SPECDRIVE.md").is_file()
-    out = capsys.readouterr().out
-    assert "installed generic adapter" in out
+    assert "installed generic adapter" in capsys.readouterr().out
 
 
 def test_install_clobber_refused(tmp_path, capsys):
@@ -69,80 +46,14 @@ def test_install_clobber_refused(tmp_path, capsys):
     assert "--force" in capsys.readouterr().err
 
 
-def test_xcheck_writes_state_and_logs(tmp_path, capsys):
-    main(["init", str(tmp_path)])
-    capsys.readouterr()
-    assert main(["xcheck", "self-critique", str(tmp_path)]) == 0
-    out = capsys.readouterr().out
-    assert "self-critique" in out
-
-    s = state.load_state(tmp_path)
-    assert s["cross_check"] == "self-critique"
-    log = (state.specdrive_dir(tmp_path) / state.DECISION_LOG_FILE).read_text()
-    assert "Cross-check mode set to self-critique" in log
-
-
-def test_xcheck_unmanaged_returns_1(tmp_path, capsys):
-    assert main(["xcheck", "none", str(tmp_path)]) == 1
-    assert "not specdrive-managed" in capsys.readouterr().err
-
-
-def test_xcheck_bad_mode_rejected(tmp_path):
-    main(["init", str(tmp_path)])
-    with pytest.raises(SystemExit):  # argparse choices reject
-        main(["xcheck", "bogus", str(tmp_path)])
-
-
-# --- v2 commands ---
-
-def _p(tmp_path):
-    return str(tmp_path)
-
-
-def test_mutation_commands_drive_a_session(tmp_path, capsys):
-    p = _p(tmp_path)
-    main(["init", p])
-    for argv in (["goal", "set", "g", p], ["decision", "set", "d", p],
-                 ["scope", "add", "s", p], ["constraint", "add", "c", p],
-                 ["phase", "2-buckets", p], ["bucket", "add", "alpha", p],
-                 ["phase", "3-build", p], ["bucket", "start", "1", p],
-                 ["bucket", "approve", "1", p]):
-        assert main(argv) == 0, argv
-    capsys.readouterr()
-    s = state.load_state(tmp_path)
-    assert s["goal"] == "g" and s["core_decision"] == "d"
-    assert s["buckets"][0]["status"] == "approved"
-
-
-def test_next_command(tmp_path, capsys):
-    main(["init", str(tmp_path)])
-    capsys.readouterr()
-    assert main(["next", str(tmp_path)]) == 0
-    assert "Phase 1" in capsys.readouterr().out
-
-
-def test_log_add_command(tmp_path, capsys):
-    main(["init", str(tmp_path)])
-    capsys.readouterr()
-    assert main(["log-add", "a note", str(tmp_path)]) == 0
-    assert "DL-1  a note" in capsys.readouterr().out
-
-
-def test_phase_forward_skip_cli_returns_1(tmp_path, capsys):
-    main(["init", str(tmp_path)])
-    capsys.readouterr()
-    assert main(["phase", "done", str(tmp_path)]) == 1
-    assert "cannot skip" in capsys.readouterr().err
-
-
-def test_bucket_approve_before_start_cli_returns_1(tmp_path, capsys):
-    p = _p(tmp_path)
-    main(["init", p])
-    main(["phase", "2-buckets", p]); main(["bucket", "add", "a", p])
-    main(["phase", "3-build", p])
-    capsys.readouterr()
-    assert main(["bucket", "approve", "1", p]) == 1
-    assert "not building" in capsys.readouterr().err
+def test_install_shared_agent_is_idempotent(tmp_path, capsys):
+    # AGENTS.md adapters merge a managed block; re-running must not clobber or duplicate.
+    (tmp_path / "AGENTS.md").write_text("# project rules\n\nkeep it tidy\n")
+    assert main(["install", "codex", str(tmp_path)]) == 0
+    assert main(["install", "codex", str(tmp_path)]) == 0  # no --force needed
+    text = (tmp_path / "AGENTS.md").read_text()
+    assert text.count("specdrive:begin") == 1
+    assert "keep it tidy" in text  # existing content preserved
 
 
 def test_validate_command_clean(tmp_path, capsys):
@@ -152,11 +63,22 @@ def test_validate_command_clean(tmp_path, capsys):
     assert "valid" in capsys.readouterr().out
 
 
+def test_validate_unmanaged_returns_1(tmp_path, capsys):
+    assert main(["validate", str(tmp_path)]) == 1
+    assert "not specdrive-managed" in capsys.readouterr().err
+
+
 def test_corrupt_state_gives_clean_error_not_traceback(tmp_path, capsys):
-    import json
     main(["init", str(tmp_path)])
     pth = state.specdrive_dir(tmp_path) / state.STATE_FILE
-    d = json.loads(pth.read_text()); d["phase"] = "bogus"; pth.write_text(json.dumps(d))
+    d = json.loads(pth.read_text())
+    d["phase"] = "bogus"
+    pth.write_text(json.dumps(d))
     capsys.readouterr()
-    assert main(["status", str(tmp_path)]) == 1  # global StateError handling
-    assert "error:" in capsys.readouterr().err
+    assert main(["validate", str(tmp_path)]) == 1
+    assert "invalid" in capsys.readouterr().err
+
+
+def test_unknown_subcommand_rejected():
+    with pytest.raises(SystemExit):
+        main(["frobnicate"])
